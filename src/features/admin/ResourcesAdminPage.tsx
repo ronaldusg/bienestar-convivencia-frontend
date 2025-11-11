@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Container } from '@/shared/components/Container';
 import { SectionHeader } from '@/shared/components/SectionHeader';
 import { Button } from '@/components/ui/button';
@@ -16,66 +16,95 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/shared/components/ConfirmDialog';
 import { ResourceFormDialog } from './components/ResourceFormDialog';
 
+import { resourcesService } from '@/shared/services/resources.service';
+
 export const ResourcesAdminPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedResource, setSelectedResource] = useState<any>(null);
   const [resourceToDelete, setResourceToDelete] = useState<{ id: string; title: string } | null>(null);
-  const resources = [
-    {
-      id: '1',
-      title: 'Centro de Salud Universitario',
-      type: 'Salud',
-      contact: 'salud@universidad.edu',
-      visible: true,
-    },
-    {
-      id: '2',
-      title: 'Asesoría Académica',
-      type: 'Académico',
-      contact: 'asesoria@universidad.edu',
-      visible: true,
-    },
-    {
-      id: '3',
-      title: 'Apoyo Financiero',
-      type: 'Financiero',
-      contact: 'becas@universidad.edu',
-      visible: true,
-    },
-    {
-      id: '4',
-      title: 'Biblioteca Central',
-      type: 'Académico',
-      contact: 'biblioteca@universidad.edu',
-      visible: true,
-    },
-  ];
+
+  const [items, setItems] = useState<any[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  
+  async function load() {
+    setLoading(true);
+    try {
+      const list = await resourcesService.getAll({ includeHidden: true });
+
+      console.log('📦 Respuesta del backend /resources:', list);
+
+      const normalized = (Array.isArray(list) ? list : []).map((r: any) => ({
+        ...r,
+        id: r.id ?? r._id,
+      }));
+      setItems(normalized);
+    } catch (e: any) {
+      console.error('Error cargando recursos:', e);
+      toast.error(e?.message ?? 'No se pudo cargar la lista de recursos');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
 
   const handleEdit = (resource: any) => {
     setSelectedResource(resource);
     setDialogOpen(true);
   };
 
-  const handleToggleVisibility = (resourceId: string, resourceTitle: string) => {
-    toast.success(`Visibilidad de "${resourceTitle}" actualizada`);
-  };
+  async function handleToggleVisibility(resourceId: string) {
+    const current = items.find((i) => i.id === resourceId);
+    await resourcesService.update(resourceId, { visible: !current.visible });
+    toast.success('Visibilidad actualizada');
+    await load();
+  }
 
   const handleDelete = (resourceId: string, resourceTitle: string) => {
     setResourceToDelete({ id: resourceId, title: resourceTitle });
     setConfirmOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (resourceToDelete) {
+  async function confirmDelete() {
+    if (!resourceToDelete?.id) return;
+    try {
+      await resourcesService.delete(resourceToDelete.id); // DELETE /resources/:id
       toast.success(`Recurso "${resourceToDelete.title}" eliminado`);
       setResourceToDelete(null);
+      setConfirmOpen(false);
+      await load();
+    } catch (e: any) {
+      console.error('Error eliminando recurso:', e);
+      toast.error(e?.message ?? 'No se pudo eliminar el recurso');
     }
-  };
+  }
 
-  const handleSaveResource = (resourceData: any) => {
-    console.log('Guardando recurso:', resourceData);
-  };
+  async function handleSaveResource(formData: any) {
+    const payload = {
+      title: formData.title,
+      content: formData.description ?? formData.content ?? '',
+      type: formData.type,
+      contact: formData.contact ?? undefined,
+      visible: typeof formData.visible === 'boolean' ? formData.visible : true,
+      location: formData.location ?? undefined,
+      hours: formData.hours ?? undefined,
+    };
+    try {
+      const res = selectedResource?.id
+        ? await resourcesService.update(selectedResource.id, payload)
+        : await resourcesService.create(payload);
+      await load();                 
+      setDialogOpen(false);         
+      toast.success(selectedResource?.id ? 'Recurso actualizado' : 'Recurso creado');
+      return res;                   
+    } catch (e: any) {
+      console.error('Error guardando recurso:', e);
+      toast.error(e?.message ?? 'No se pudo guardar el recurso');
+      throw e;                      
+    }
+  }
 
   return (
     <Container>
@@ -118,19 +147,26 @@ export const ResourcesAdminPage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {resources.map((resource) => (
+            {items.map((resource) => (
               <TableRow key={resource.id}>
                 <TableCell className="font-medium">{resource.title}</TableCell>
                 <TableCell>
                   <Badge variant="outline">{resource.type}</Badge>
                 </TableCell>
-                <TableCell>{resource.contact}</TableCell>
+                <TableCell>
+                  {typeof resource.contact === 'string'
+                    ? resource.contact
+                    : [resource.contact?.email, resource.contact?.phone]
+                        .filter(Boolean)
+                        .join(' · ')
+                  }
+                </TableCell>
                 <TableCell>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() =>
-                      handleToggleVisibility(resource.id, resource.title)
+                      handleToggleVisibility(resource.id)
                     }
                   >
                     {resource.visible ? (

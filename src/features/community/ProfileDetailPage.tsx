@@ -6,45 +6,95 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, GraduationCap, Globe, MessageCircle } from 'lucide-react';
 
+import { usersService } from '@/shared/services/users.service';
+import { useEffect, useState } from 'react';
+
+import { toast } from 'sonner';
+import { UserPlus } from 'lucide-react';
+
 export const ProfileDetailPage = () => {
-  const { id } = useParams();
+  const { id: routeId, userId } = useParams();
+  const id = (routeId ?? userId) as string | undefined;
+
   const navigate = useNavigate();
 
-  // Mock data - en producción vendría de la API
-  const students = [
-    {
-      id: '1',
-      name: 'Ana García Rodríguez',
-      faculty: 'Ingeniería',
-      career: 'Ingeniería de Sistemas',
-      nationality: 'Colombia',
-      interests: ['Tecnología', 'Deportes', 'Música'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ana',
-      bio: 'Estudiante de último año apasionada por la tecnología y el desarrollo web. Me encanta colaborar en proyectos innovadores.',
-    },
-    {
-      id: '2',
-      name: 'Carlos Mendoza',
-      faculty: 'Ciencias',
-      career: 'Biología',
-      nationality: 'México',
-      interests: ['Naturaleza', 'Fotografía', 'Voluntariado'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carlos',
-      bio: 'Amante de la naturaleza y la fotografía. Busco conectar con personas interesadas en proyectos ambientales.',
-    },
-    {
-      id: '3',
-      name: 'María Fernández',
-      faculty: 'Artes',
-      career: 'Diseño Gráfico',
-      nationality: 'España',
-      interests: ['Arte', 'Cine', 'Teatro'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Maria',
-      bio: 'Diseñadora gráfica con pasión por las artes visuales y el cine. Siempre en busca de nuevas inspiraciones.',
-    },
-  ];
+  const [student, setStudent] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
 
-  const student = students.find((s) => s.id === id);
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        if (!id) {  
+          setError('Perfil inválido: id ausente');
+          return;
+        }
+
+        const data = await usersService.getById(id);
+
+        const container = (data as any)?.data ?? data;
+        let raw: any =
+          container?.user ??
+          container?.data?.user ??
+          (container && typeof container === 'object' && !Array.isArray(container) ? container : null);
+
+        if (!raw) {
+          const list = await usersService.getAll?.();
+
+          if (Array.isArray(list)) {
+            raw = list.find((u: any) => (u?.id ?? u?._id) === id) ?? null;
+          }
+        }
+
+        if (!raw || typeof raw !== 'object') {
+          setError('Perfil no encontrado');
+          setStudent(null);
+          return;
+        }
+
+        setError(null);
+        setStudent({
+          ...raw,
+          id: raw.id ?? raw._id ?? id, 
+          name: raw.name ?? 'Usuario',
+          avatar: raw.avatar ?? raw.photo ?? null,
+          faculty: raw.faculty ?? '—',
+          career: raw.career ?? '—',
+          nationality: raw.nationality ?? '—',
+          bio: raw.bio ?? '',
+          interests: Array.isArray(raw.interests) ? raw.interests : [],
+        });
+      } catch (err: any) {
+        console.error(err);
+        setError(err?.response?.data?.message ?? 'No se pudo cargar el perfil');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <Container>
+        <p className="text-center text-sm text-muted-foreground py-8">Cargando perfil…</p>
+      </Container>
+    );
+  }
+
+  if (error || !student) {
+    return (
+      <Container>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">{error ?? 'Perfil no encontrado'}</p>
+          <Button onClick={() => navigate('/community')} className="mt-4">
+            Volver a Comunidad
+          </Button>
+        </div>
+      </Container>
+    );
+  }
 
   if (!student) {
     return (
@@ -75,26 +125,34 @@ export const ProfileDetailPage = () => {
         <Card className="lg:col-span-1">
           <CardHeader className="text-center">
             <Avatar className="h-32 w-32 mx-auto mb-4">
-              <AvatarImage src={student.avatar} />
+              <AvatarImage src={student.avatar ?? 'https://api.dicebear.com/7.x/avataaars/svg?seed=User'} />
               <AvatarFallback className="text-4xl bg-primary/10 text-primary">
-                {student.name.charAt(0)}
+                {(student.name ?? 'U')[0]}
               </AvatarFallback>
             </Avatar>
-            <CardTitle className="text-xl">{student.name}</CardTitle>
+            <CardTitle className="text-xl">{student.name ?? 'Usuario'}</CardTitle>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-2">
               <GraduationCap className="h-4 w-4" />
-              <span>{student.faculty}</span>
+              <span>{student.faculty ?? '—'}</span>
             </div>
-            <p className="text-sm text-muted-foreground">{student.career}</p>
+            <p className="text-sm text-muted-foreground">{student.career ?? '—'}</p>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-1">
               <Globe className="h-4 w-4" />
-              <span>{student.nationality}</span>
+              <span>{student.nationality ?? '—'}</span>
             </div>
           </CardHeader>
+
           <CardContent>
-            <Button className="w-full gap-2">
-              <MessageCircle className="h-4 w-4" />
-              Enviar Mensaje
+            <Button
+              className="w-full gap-2"
+              onClick={() => {
+                setConnected(true);
+                toast.success(`Has enviado una solicitud de conexión a ${student.name ?? 'este usuario'}`);
+              }}
+              disabled={connected}
+            >
+              <UserPlus className="h-4 w-4" />
+              {connected ? 'Solicitud enviada' : 'Conectar'}
             </Button>
           </CardContent>
         </Card>
@@ -105,12 +163,11 @@ export const ProfileDetailPage = () => {
             <CardTitle>Sobre mí</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <p className="text-muted-foreground">{student.bio}</p>
-
+            <p className="text-muted-foreground">{student.bio ?? 'Sin descripción'}</p>
             <div>
               <h3 className="font-semibold mb-3">Intereses</h3>
               <div className="flex flex-wrap gap-2">
-                {student.interests.map((interest) => (
+                {(Array.isArray(student?.interests) ? student.interests : []).map((interest: string) => (
                   <Badge key={interest} variant="secondary" className="px-3 py-1">
                     {interest}
                   </Badge>

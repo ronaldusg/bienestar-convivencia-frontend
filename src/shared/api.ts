@@ -15,7 +15,13 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     //console.log('[HTTP]', config.method?.toUpperCase(), (config.baseURL || '') + (config.url || ''));
-    console.log('[HTTP]', config.method?.toUpperCase(), (config.baseURL||'') + (config.url||''), (config.headers as any)?.Authorization);
+    // console.log('[HTTP]', config.method?.toUpperCase(), (config.baseURL||'') + (config.url||''), (config.headers as any)?.Authorization);
+    // console.log(
+    //   '[HTTP]',
+    //   config.method?.toUpperCase(),
+    //   (config.baseURL || '') + (config.url || ''),
+    //   'Auth:', Boolean((config.headers as any)?.Authorization)
+    // );
     return config;
   },
   (error) => {

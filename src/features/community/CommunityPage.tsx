@@ -15,92 +15,69 @@ import {
 } from '@/components/ui/select';
 import { UserPlus, GraduationCap, Globe, Eye } from 'lucide-react';
 
+import { useEffect } from 'react';
+import { toast } from 'sonner';
+import { usersService } from '@/shared/services/users.service';
+
+import { Input } from '@/components/ui/input';
+
+function norm(s: unknown) {
+  return String(s ?? '')
+    .normalize('NFD')               
+    .replace(/\p{Diacritic}/gu, '') 
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');          
+}
+
 export const CommunityPage = () => {
   const [facultyFilter, setFacultyFilter] = useState('all');
   const [nationalityFilter, setNationalityFilter] = useState('all');
-  const [interestFilter, setInterestFilter] = useState('all');
+  const [interestFilter, setInterestFilter] = useState('');
 
-  const students = [
-    {
-      id: '1',
-      name: 'Ana García Rodríguez',
-      faculty: 'Ingeniería',
-      career: 'Ingeniería de Sistemas',
-      nationality: 'Colombia',
-      interests: ['Tecnología', 'Deportes', 'Música'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ana',
-    },
-    {
-      id: '2',
-      name: 'Carlos Mendoza',
-      faculty: 'Ciencias',
-      career: 'Biología',
-      nationality: 'México',
-      interests: ['Naturaleza', 'Fotografía', 'Voluntariado'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carlos',
-    },
-    {
-      id: '3',
-      name: 'María Fernández',
-      faculty: 'Artes',
-      career: 'Diseño Gráfico',
-      nationality: 'España',
-      interests: ['Arte', 'Cine', 'Teatro'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Maria',
-    },
-    {
-      id: '4',
-      name: 'Juan López Torres',
-      faculty: 'Ingeniería',
-      career: 'Ingeniería Civil',
-      nationality: 'Chile',
-      interests: ['Arquitectura', 'Viajes', 'Gaming'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Juan',
-    },
-    {
-      id: '5',
-      name: 'Laura Martínez',
-      faculty: 'Medicina',
-      career: 'Medicina General',
-      nationality: 'Argentina',
-      interests: ['Salud', 'Yoga', 'Cocina'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Laura',
-    },
-    {
-      id: '6',
-      name: 'Diego Silva',
-      faculty: 'Economía',
-      career: 'Administración',
-      nationality: 'Perú',
-      interests: ['Emprendimiento', 'Finanzas', 'Networking'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Diego',
-    },
-    {
-      id: '7',
-      name: 'Sofia Ramírez',
-      faculty: 'Ciencias Sociales',
-      career: 'Psicología',
-      nationality: 'Uruguay',
-      interests: ['Psicología', 'Lectura', 'Meditación'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sofia',
-    },
-    {
-      id: '8',
-      name: 'Miguel Ángel Castro',
-      faculty: 'Ingeniería',
-      career: 'Ingeniería Industrial',
-      nationality: 'Ecuador',
-      interests: ['Innovación', 'Deportes', 'Tecnología'],
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Miguel',
-    },
-  ];
+  const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredStudents = students.filter((student) => {
-    const matchesFaculty = facultyFilter === 'all' || student.faculty === facultyFilter;
-    const matchesNationality = nationalityFilter === 'all' || student.nationality === nationalityFilter;
-    const matchesInterest = interestFilter === 'all' || student.interests.includes(interestFilter);
-    return matchesFaculty && matchesNationality && matchesInterest;
-  });
+  const filteredStudents = students
+    .filter(Boolean) 
+    .filter((student) => {
+      const matchesFaculty = facultyFilter === 'all' || student.faculty === facultyFilter;
+      const matchesNationality = nationalityFilter === 'all' || student.nationality === nationalityFilter;
+      const q = norm(interestFilter);
+      const matchesInterest =
+        !q ||
+        (Array.isArray(student.interests) && student.interests.some((i: string) => norm(i).includes(q)));
+      return matchesFaculty && matchesNationality && matchesInterest;
+    });
+
+  useEffect(() => {
+    const toParam = (v: string) => {
+      const t = (v ?? '').trim();
+      return t && t !== 'all' ? t : undefined;
+    };
+
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await usersService.getAll({
+          faculty: toParam(facultyFilter),
+          nationality: toParam(nationalityFilter),
+          interests: toParam(interestFilter),
+        });
+        if (!mounted) return;
+        setStudents(Array.isArray(data) ? data.filter(Boolean) : []);
+      } catch (e: any) {
+        console.error(e);
+        toast.error(e?.response?.data?.message ?? 'No se pudo cargar la comunidad');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [facultyFilter, nationalityFilter]);
 
   return (
     <Container>
@@ -145,74 +122,80 @@ export const CommunityPage = () => {
               </SelectContent>
             </Select>
 
-            <Select value={interestFilter} onValueChange={setInterestFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Interés" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los intereses</SelectItem>
-                <SelectItem value="Tecnología">Tecnología</SelectItem>
-                <SelectItem value="Deportes">Deportes</SelectItem>
-                <SelectItem value="Música">Música</SelectItem>
-                <SelectItem value="Arte">Arte</SelectItem>
-                <SelectItem value="Naturaleza">Naturaleza</SelectItem>
-                <SelectItem value="Fotografía">Fotografía</SelectItem>
-                <SelectItem value="Voluntariado">Voluntariado</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="Buscar por interés..."
+                value={interestFilter}
+                onChange={(e) => setInterestFilter(e.target.value)}
+                className="w-full"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Students Grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredStudents.map((student) => (
-          <Card key={student.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="text-center">
-              <Avatar className="h-24 w-24 mx-auto mb-4">
-                <AvatarImage src={student.avatar} />
-                <AvatarFallback className="text-2xl bg-primary/10 text-primary">
-                  {student.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <h3 className="font-semibold text-lg">{student.name}</h3>
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-2">
-                <GraduationCap className="h-4 w-4" />
-                <span>{student.faculty}</span>
-              </div>
-              <p className="text-sm text-muted-foreground">{student.career}</p>
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-1">
-                <Globe className="h-4 w-4" />
-                <span>{student.nationality}</span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4">
-                <p className="text-xs text-muted-foreground mb-2">Intereses</p>
-                <div className="flex flex-wrap gap-2">
-                  {student.interests.map((interest) => (
-                    <Badge key={interest} variant="secondary" className="text-xs">
-                      {interest}
-                    </Badge>
-                  ))}
+        {filteredStudents.map((student, idx) => {
+
+          const sid = student?._id ?? student?.id ?? `row-${idx}`;
+
+          return (
+            <Card key={sid} className="hover:shadow-lg transition-shadow">
+              <CardHeader className="text-center">
+                <Avatar className="h-24 w-24 mx-auto mb-4">
+                  <AvatarImage src={student?.avatar} />
+                  <AvatarFallback className="text-2xl bg-primary/10 text-primary">
+                    {(student?.name ?? 'U').charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                <h3 className="font-semibold text-lg">{student?.name ?? 'Usuario'}</h3>
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-2">
+                  <GraduationCap className="h-4 w-4" />
+                  <span>{student?.faculty ?? '—'}</span>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Link to={`/community/${student.id}`} className="flex-1">
-                  <Button variant="outline" className="w-full gap-2">
-                    <Eye className="h-4 w-4" />
-                    Ver Perfil
-                  </Button>
-                </Link>
-                <Button className="flex-1 gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Conectar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                <p className="text-sm text-muted-foreground">{student?.career ?? '—'}</p>
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-1">
+                  <Globe className="h-4 w-4" />
+                  <span>{student?.nationality ?? '—'}</span>
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                <div className="mb-4">
+                  <p className="text-xs text-muted-foreground mb-2">Intereses</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(Array.isArray(student?.interests) ? student.interests : []).map((interest: string) => (
+                      <Badge key={interest} variant="secondary" className="text-xs">
+                        {interest}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Link to={student?._id || student?.id ? `/community/${sid}` : '#'} className="flex-1">
+                    <Button variant="outline" className="w-full gap-2" disabled={!student?._id && !student?.id}>
+                      <Eye className="h-4 w-4" />
+                      Ver Perfil
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      {loading && <p className="text-center text-sm text-muted-foreground py-8">Cargando comunidad…</p>}
+
+      {!loading && students.length === 0 && (
+        <p className="text-center text-sm text-muted-foreground py-8">
+          No se encontraron estudiantes con los filtros seleccionados.
+        </p>
+      )}
+
     </Container>
   );
 };

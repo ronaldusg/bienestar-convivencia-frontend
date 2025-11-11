@@ -1,3 +1,6 @@
+import { useEffect } from 'react';
+import { usersService } from '@/shared/services/users.service';
+
 import { useState } from 'react';
 import { Container } from '@/shared/components/Container';
 import { SectionHeader } from '@/shared/components/SectionHeader';
@@ -33,40 +36,24 @@ export const UsersAdminPage = () => {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
 
-  const users = [
-    {
-      id: '1',
-      name: 'Ana García',
-      email: 'ana.garcia@mail.com',
-      role: 'student',
-      faculty: 'Ingeniería',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ana',
-    },
-    {
-      id: '2',
-      name: 'Carlos Admin',
-      email: 'admin@universidad.edu',
-      role: 'admin',
-      faculty: 'Administración',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carlos',
-    },
-    {
-      id: '3',
-      name: 'María López',
-      email: 'maria.lopez@mail.com',
-      role: 'student',
-      faculty: 'Medicina',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Maria',
-    },
-    {
-      id: '4',
-      name: 'Juan Pérez',
-      email: 'juan.perez@mail.com',
-      role: 'student',
-      faculty: 'Artes',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Juan',
-    },
-  ];
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    usersService
+      .getAll()
+      .then((data) => {
+        console.log('Usuarios cargados desde API:', data);
+        setUsers(Array.isArray(data) ? data : (data as any)?.data ?? []);
+      })
+      .catch((err) => {
+        console.error('Error al obtener usuarios:', err);
+        setError(err.message || 'Error al obtener usuarios');
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -86,17 +73,58 @@ export const UsersAdminPage = () => {
     setConfirmOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (userToDelete) {
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
+    try {
+      await usersService.remove(userToDelete.id);       // DELETE /users/:id
       toast.success(`Usuario ${userToDelete.name} eliminado`);
+
+      const list = await usersService.getAll();
+      setUsers(Array.isArray(list) ? list : (list as any)?.data ?? []);
+
       setUserToDelete(null);
+      setConfirmOpen(false);
+    } catch (e: any) {
+      console.error('Error eliminando usuario:', e);
+      toast.error(e?.message ?? 'No se pudo eliminar el usuario');
     }
   };
 
-  const handleSaveUser = (userData: any) => {
-    // En producción aquí se haría la llamada a la API
-    console.log('Guardando usuario:', userData);
-  };
+  const handleSaveUser = async (userData: any) => {
+  try {
+    if (selectedUser?.id || selectedUser?._id) {
+      const id = selectedUser._id || selectedUser.id;
+      await usersService.update(id, {
+        name: userData.name,
+        role: userData.role,
+        faculty: userData.faculty,
+      });
+      toast.success(`Usuario ${userData.name} actualizado`);
+    } else {
+      const created = await usersService.create({
+        name: userData.name,
+        email: userData.email,
+        password: 'Password123!',
+        role: userData.role || 'student',
+        faculty: userData.faculty,
+      });
+      toast.success(`Usuario ${created?.name ?? userData.name} creado`);
+    }
+
+    setDialogOpen(false);
+
+    await usersService.getAll().then((data) => {
+      setUsers(Array.isArray(data) ? data : (data as any)?.data ?? []);
+    });
+
+  } catch (e: any) {
+    console.error('Error guardando usuario:', e);
+    toast.error(e?.message ?? 'No se pudo guardar el usuario');
+  }
+};
+
+  if (loading) return <p>Cargando usuarios...</p>;
+  if (error) return <p style={{ color: 'red' }}>{error}</p>;
 
   return (
     <Container>
@@ -163,7 +191,8 @@ export const UsersAdminPage = () => {
           </TableHeader>
           <TableBody>
             {filteredUsers.map((user) => (
-              <TableRow key={user.id}>
+              //<TableRow key={user.id}>
+              <TableRow key={user._id || user.id || user.email}>
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar>
@@ -188,7 +217,7 @@ export const UsersAdminPage = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(user.id, user.name)}
+                      onClick={() => handleDelete(user._id || user.id, user.name)}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>

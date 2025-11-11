@@ -5,13 +5,86 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Users, Calendar, Heart, TrendingUp } from 'lucide-react';
 
+import { useEffect, useState } from 'react';
+import { usersService } from '@/shared/services/users.service';
+import { eventsService } from '@/shared/services/events.service';
+import { resourcesService } from '@/shared/services/resources.service';
+
+async function fetchCount(url: string, signal?: AbortSignal): Promise<number> {
+
+  const token = localStorage.getItem('token'); 
+  const headers: any = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(url, { signal, headers });
+
+  if (!res.ok) throw new Error(`Error ${res.status} en ${url}`);
+
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) return 0;
+
+  const totalHeader = res.headers.get('X-Total-Count');
+  if (totalHeader) return Number(totalHeader);
+
+  const data = await res.json();
+  if (Array.isArray(data)) return data.length;
+  if (typeof data?.total === 'number') return data.total;
+  if (Array.isArray(data?.data)) return data.data.length;
+  if (Array.isArray(data?.items)) return data.items.length;
+  if (Array.isArray(data?.docs)) return data.docs.length;
+  if (typeof data?.count === 'number') return data.count;
+
+  return 0;
+}
+
+function countFromResp(resp: unknown): number {
+  const r = resp as any;
+  if (Array.isArray(r)) return r.length;
+  if (typeof r?.total === 'number') return r.total;
+  if (typeof r?.totalDocs === 'number') return r.totalDocs;
+  if (Array.isArray(r?.data)) return r.data.length;
+  if (Array.isArray(r?.items)) return r.items.length;
+  if (Array.isArray(r?.docs)) return r.docs.length;
+  return 0;
+}
+
 export const AdminDashboard = () => {
-  const stats = [
-    { label: 'Total Usuarios', value: '1,250', icon: Users, href: '/admin/users' },
-    { label: 'Eventos Activos', value: '24', icon: Calendar, href: '/admin/events' },
-    { label: 'Recursos', value: '42', icon: Heart, href: '/admin/resources' },
+
+  const [stats, setStats] = useState([
+    { label: 'Total Usuarios', value: '—', icon: Users, href: '/admin/users' },
+    { label: 'Eventos Activos', value: '—', icon: Calendar, href: '/admin/events' },
+    { label: 'Recursos', value: '—', icon: Heart, href: '/admin/resources' },
     { label: 'Actividad Mensual', value: '+23%', icon: TrendingUp, href: '#' },
-  ];
+  ]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+
+        const [usersResp, eventsResp, resourcesResp] = await Promise.all([
+          usersService.getAll(),
+          eventsService.getAll(),
+          resourcesService.getAll(),
+        ]);
+
+        const users = countFromResp(usersResp);
+        const events = countFromResp(eventsResp);
+        const resources = countFromResp(resourcesResp);
+
+        setStats((prev) =>
+          prev.map((s) => {
+            if (s.label === 'Total Usuarios') return { ...s, value: users.toLocaleString() };
+            if (s.label === 'Eventos Activos') return { ...s, value: events.toLocaleString() };
+            if (s.label === 'Recursos') return { ...s, value: resources.toLocaleString() };
+            return s;
+          })
+        );
+      } catch (err) {
+        console.error('Error cargando métricas:', err);
+      }
+    };
+    load();
+  }, []);
 
   return (
     <Container>

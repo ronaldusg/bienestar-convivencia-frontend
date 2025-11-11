@@ -27,6 +27,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
+import { useEffect } from 'react';
+
 const userSchema = z.object({
   name: z.string().min(3, 'El nombre debe tener al menos 3 caracteres'),
   email: z.string().email('Email inválido'),
@@ -65,6 +67,15 @@ export const UserFormDialog = ({
     form.reset();
     onOpenChange(false);
   };
+
+  useEffect(() => {
+    form.reset({
+      name: user?.name || '',
+      email: user?.email || '',
+      role: user?.role || 'student',
+      faculty: user?.faculty || '',
+    });
+  }, [user, form]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

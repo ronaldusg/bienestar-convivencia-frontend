@@ -28,6 +28,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
+import { useEffect } from 'react';
+
 const eventSchema = z.object({
   title: z.string().min(5, 'El título debe tener al menos 5 caracteres'),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
@@ -70,6 +72,20 @@ export const EventFormDialog = ({
     form.reset();
     onOpenChange(false);
   };
+
+  useEffect(() => {
+    const normalized = {
+      title: event?.title || '',
+      description: event?.description || '',
+      category: event?.category || '',
+      date: event?.date
+        || (event?.startAt ? String(event.startAt).slice(0, 10) : ''), // YYYY-MM-DD
+      location: event?.location?.name || event?.location || '',
+      capacity: event?.capacity != null ? String(event.capacity) : '',
+    };
+
+    form.reset(normalized);
+  }, [event, form]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

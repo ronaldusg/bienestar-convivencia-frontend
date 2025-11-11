@@ -29,6 +29,8 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
+import { useEffect } from 'react';
+
 const resourceSchema = z.object({
   title: z.string().min(5, 'El título debe tener al menos 5 caracteres'),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
@@ -44,7 +46,7 @@ interface ResourceFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   resource?: any;
-  onSave: (resource: ResourceFormValues) => void;
+  onSave: (resource: any) => void;
 }
 
 export const ResourceFormDialog = ({
@@ -57,20 +59,53 @@ export const ResourceFormDialog = ({
     resolver: zodResolver(resourceSchema),
     defaultValues: {
       title: resource?.title || '',
-      description: resource?.description || '',
+      description: resource?.description || resource?.content || '',
       type: resource?.type || '',
-      contact: resource?.contact || '',
-      phone: resource?.phone || '',
+      contact: (resource?.contact && typeof resource.contact === 'object'
+        ? resource.contact.email
+        : resource?.contact) || '',
+      phone: (resource?.contact && typeof resource.contact === 'object'
+        ? resource.contact.phone
+        : resource?.phone) || '',
       visible: resource?.visible ?? true,
     },
   });
 
-  const onSubmit = (data: ResourceFormValues) => {
-    onSave(data);
-    toast.success(resource ? 'Recurso actualizado' : 'Recurso creado');
-    form.reset();
-    onOpenChange(false);
+  const onSubmit = async (data: ResourceFormValues) => {
+    
+    const payload = {
+      title: data.title,
+      content: data.description,                 
+      type: data.type,
+      contact: { email: data.contact, phone: data.phone },
+      visible: data.visible,
+    };
+
+    try {
+      await onSave(payload);
+      toast.success(resource ? 'Recurso actualizado' : 'Recurso creado');
+      form.reset();
+      onOpenChange(false);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar el recurso');
+    }
   };
+
+  useEffect(() => {
+    form.reset({
+      title: resource?.title || '',
+      description: resource?.description || resource?.content || '',
+      type: resource?.type || '',
+      contact: (resource?.contact && typeof resource?.contact === 'object'
+        ? resource.contact.email
+        : resource?.contact) || '',
+      phone: (resource?.contact && typeof resource?.contact === 'object'
+        ? resource.contact.phone
+        : resource?.phone) || '',
+      visible: resource?.visible ?? true,
+    });
+  }, [resource, form]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -83,7 +118,16 @@ export const ResourceFormDialog = ({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form
+               onSubmit={form.handleSubmit(
+                 onSubmit,
+                 (errs) => {
+                   console.error('Errores de validación:', errs);
+                   toast.error('Revisa los campos resaltados');
+                 }
+               )}
+               className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="title"
@@ -122,7 +166,7 @@ export const ResourceFormDialog = ({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Tipo</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona tipo" />
